@@ -1,0 +1,236 @@
+
+import pandas as pd
+import datetime as dt
+import numpy as np
+
+ Data Cleaning
+In this section, you will need to read the CSV files into DataFrames and perform any necessary data cleaning steps. After cleaning, combine all DataFrames into a single DataFrame.Files:
+whale_returns.csv
+algo_returns.csv
+sp500_history.csv
+
+import csv
+with open ("whale_returns.csv" , "r+") as csv_file:
+    whale_returns = pd.read_csv(csv_file, 
+                          parse_dates=True, 
+                          index_col='Date', 
+                          infer_datetime_format=True)
+
+## Count nulls
+
+whale_returns.isnull().sum()
+
+#drop nulls
+
+whale_returns.dropna(inplace=True)
+
+Read the algorithmic daily returns and clean the data
+
+import csv
+with open ("algo_returns.csv" , "r+") as csv_file:
+    algo_returns = pd.read_csv(csv_file, 
+                          parse_dates=True, 
+                          index_col='Date', 
+                          infer_datetime_format=True)
+
+
+algo_returns.isnull().sum()
+
+algo_returns.dropna(inplace=True)
+
+ S&P 500 Returns
+Read the S&P500 Historic Closing Prices and create a new daily returns DataFrame from the data.
+
+import csv
+with open ("sp500_history.csv" , "r+") as csv_file:
+    sp500_history = pd.read_csv(csv_file, 
+                          parse_dates=True, 
+                          index_col='Date', 
+                          infer_datetime_format=True)
+# Check Data Types
+
+sp500_history.dtypes
+
+ # Fix Data Types
+
+sp500_history["Close"] = sp500_history["Close"].str.replace("$","")
+
+sp500_history['Close'] = sp500_history['Close'].astype('float')
+
+
+ # Calculate Daily Returns
+
+daily_returns = (sp500_history - sp500_history.shift(1)) / sp500_history.shift(1)
+daily_returns.head()
+
+ # Drop nulls
+
+daily_returns.dropna(inplace = True)
+
+ # Rename Column
+
+columns = ["Close"]
+
+daily_returns = daily_returns.rename(columns ={"Close":"SP500"})
+daily_returns.head()
+
+ # Concatenate all DataFrames into a single DataFrame
+
+joined_data =pd.concat([daily_returns, algo_returns, whale_returns], axis="columns" , join="inner")
+
+
+ Calculate and Plot the daily returns and cumulative returns.
+
+cumulative_sp = (1+ daily_returns).cumprod()-1
+cumulative_whale = (1+ whale_returns).cumprod()-1
+cumulative_algo = (1+ algo_returns).cumprod()-1
+
+cum_cat =pd.concat([cumulative_whale, cumulative_algo, cumulative_sp], axis="columns" ,join="inner")
+
+ # Plot daily returns
+joined_data.plot(figsize= (10,5))
+
+  # Plot cumulative returns
+cum_cat.plot()
+
+# Box plot to visually show risk
+
+joined_data.plot.box(figsize = (10,5))
+
+# Calculate the standard deviation for each portfolio. Which portfolios are riskier than the S&P 500?
+
+whale_std =whale_returns.std()
+algo_std =algo_returns.std()
+sp500_std =daily_returns.std()
+
+all_std =pd.concat([whale_std, algo_std, sp500_std], axis="columns" ,join="inner")
+
+# Determine which portfolios are riskier than the S&P 500
+
+sp500_std >all_std
+
+# Calculate the annualized standard deviation (252 trading days)
+
+all_std_annual =all_std * np.sqrt(252)
+all_std_annual.head()
+
+# Calculate and plot the rolling standard deviation for the S&PP 500 using a 21 day window
+
+sp500_std.rolling(window=21).mean().plot()
+
+ # Correlation
+
+import seaborn as sns
+import pandas as pd
+%matplotlib inline
+correlations =joined_data.corr()
+correlations.head()
+
+  # Calculate Beta for a single portfolio compared to the total market (S&P 500)
+
+covariance =joined_data["BERKSHIRE HATHAWAY INC"].rolling(window =60).cov(joined_data["SP500"])
+variance =joined_data["BERKSHIRE HATHAWAY INC"].rolling(window =60).var()
+
+Berkshire_beta = covariance / variance
+Berkshire_beta
+
+Berkshire_beta.plot()
+
+   # Annualzied Sharpe Ratios
+
+sharpe_ratios =(joined_data.mean() *252) / (joined_data.std()* np.sqrt(252))
+sharpe_ratios
+
+
+# Visualize the sharpe ratios as a bar plot
+
+sharpe_ratios.plot(kind="bar", title="Sharpe Ratios")
+
+ Choose 3-5 custom stocks with at last 1 year's worth of historic prices and create a DataFrame of the closing prices and dates for each stock.
+
+import csv
+with open ("goog_historical.csv" , "r+") as csv_file:
+    goog_returns = pd.read_csv(csv_file, 
+                          parse_dates=True, 
+                          index_col='Trade DATE', 
+                          infer_datetime_format=True)
+
+import csv
+with open ("aapl_historical.csv" , "r+") as csv_file:
+    aapl_returns = pd.read_csv(csv_file, 
+                          parse_dates=True, 
+                          index_col='Trade DATE', 
+                          infer_datetime_format=True)
+
+import csv
+with open ("cost_historical.csv" , "r+") as csv_file:
+    cost_returns = pd.read_csv(csv_file, 
+                          parse_dates=True, 
+                          index_col='Trade DATE', 
+                          infer_datetime_format=True)
+
+goog_returns.head()
+aapl_returns.head()
+cost_returns.head()
+
+# Concatenate all stocks into a single DataFrame
+
+custom_picks =pd.concat([goog_returns, aapl_returns, cost_returns], axis="columns" ,join="inner")
+custom_picks.head()
+
+  # Pivot the Data so that the stock tickers are the columns, the dates are the index, and the 
+# values are the closing prices
+
+pd.pivot_table(custom_picks, index= "Trade DATE", values= "NOCP")
+
+# Drop Nulls
+
+custom_picks.dropna(inplace=True)
+custom_picks
+
+ # Calculate weighted portfolio returns
+weights = [1/3, 1/3, 1/3]
+
+weights = [1/3, 1/3, 1/3]
+print(sum(weights))
+
+weighted_returns =custom_picks.pct_change()[1:]
+
+
+ Join your portfolio returns to the DataFrame that contains all of the portfolio returns
+
+compare_ports =pd.concat([custom_picks, joined_data], axis= "columns", join="inner")
+compare_ports.head()
+
+ # Risk
+compare_ports.plot.box(figsize =(10,20))
+
+custom_ratios =(compare_ports.mean() *252) / (compare_ports.std()* np.sqrt(252))
+custom_ratios
+
+ # Rolling
+
+compare_ports.rolling(window =21).mean().plot()
+
+ # Beta
+
+covariance =compare_ports["NOCP"].rolling(window =60).cov(compare_ports["SP500"])
+variance =compare_ports["NOCP"].rolling(window =60).var()
+
+custom_beta = covariance / variance
+custom_beta
+custom_beta.plot()
+
+ # Annualzied Sharpe Ratios
+
+custom_ratios =(compare_ports.mean() *252) / (compare_ports.std()* np.sqrt(252))
+custom_ratios
+ # Visualize the sharpe ratios as a bar plot
+
+custom_ratios.plot(kind="bar", title="Sharpe Ratios")
+
+  
+
+
+
+
